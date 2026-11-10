@@ -1,0 +1,273 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #171923;
+  --color-ink-soft: #4b4f5c;
+  --color-powder: #80b9f0;
+  --color-powder-deep: #2f6fa8;
+  --color-lavender: #e9e8f8;
+  --color-peach: #f5b69e;
+  --color-peach-deep: #b4563a;
+  --color-surface: #f7f6fc;
+  --color-line: #d8d8e6;
+  --color-support: #2f7d5d;
+  --color-contradict: #b4443c;
+  --color-caution: #a9711f;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Instrument Serif", "Palatino Linotype", Georgia, serif;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    margin: 0;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--color-powder);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-powder-deep);
+    outline-offset: 2px;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  .page-wrap {
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
+    padding-inline: 20px;
+  }
+  @media (min-width: 768px) {
+    .page-wrap {
+      padding-inline: 32px;
+    }
+  }
+
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 0.98;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 2px rgb(23 25 35 / 0.04), 0 20px 55px -38px rgb(23 25 35 / 0.35);
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--color-line) 12%, var(--color-line) 88%, transparent);
+  }
+
+  .prose-report p {
+    margin-block: 0.6rem;
+    line-height: 1.65;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .grid-lines {
+    background-image:
+      linear-gradient(to right, rgb(23 25 35 / 0.055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(23 25 35 / 0.055) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+}
+
+/* ---------------------------------------------------------------- sculpture */
+.sculpture {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 32px;
+  background:
+    radial-gradient(120% 100% at 18% 12%, #fbfaff 0%, #e9e8f8 45%, #dcdcf4 100%);
+  border: 1px solid rgb(255 255 255 / 0.75);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.9) inset,
+    0 40px 90px -45px rgb(23 25 35 / 0.45);
+}
+.sculpture__blob {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(26px);
+  opacity: 0.9;
+  will-change: transform;
+}
+.sculpture__blob--a {
+  width: 58%;
+  aspect-ratio: 1;
+  left: -8%;
+  top: 6%;
+  background: radial-gradient(circle at 35% 35%, #a9d2f8 0%, #80b9f0 45%, #5c93cc 100%);
+  animation: drift-a 22s ease-in-out infinite alternate;
+}
+.sculpture__blob--b {
+  width: 46%;
+  aspect-ratio: 1;
+  right: -4%;
+  top: 24%;
+  background: radial-gradient(circle at 40% 30%, #ffd8c7 0%, #f5b69e 55%, #e58f70 100%);
+  animation: drift-b 26s ease-in-out infinite alternate;
+}
+.sculpture__blob--c {
+  width: 40%;
+  aspect-ratio: 1;
+  left: 28%;
+  bottom: -12%;
+  background: radial-gradient(circle at 40% 35%, #fdfcff 0%, #d9d8f2 60%, #c2c1e6 100%);
+  animation: drift-c 19s ease-in-out infinite alternate;
+}
+.sculpture__ring {
+  position: absolute;
+  inset: 12%;
+  border-radius: 999px;
+  border: 1px solid rgb(23 25 35 / 0.16);
+  transform: rotate(-18deg);
+}
+.sculpture__ring::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--color-ink);
+  top: -5px;
+  left: 50%;
+}
+.sculpture__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}
+@keyframes drift-a {
+  from { transform: translate3d(-2%, -3%, 0) scale(1); }
+  to { transform: translate3d(9%, 7%, 0) scale(1.09); }
+}
+@keyframes drift-b {
+  from { transform: translate3d(4%, 2%, 0) scale(1.02); }
+  to { transform: translate3d(-7%, -6%, 0) scale(0.94); }
+}
+@keyframes drift-c {
+  from { transform: translate3d(-3%, 2%, 0) scale(0.97); }
+  to { transform: translate3d(5%, -4%, 0) scale(1.06); }
+}
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.float-slow {
+  animation: float-slow 7s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------- react flow */
+.react-flow__attribution {
+  font-size: 9px;
+  opacity: 0.55;
+}
+.react-flow__edge-text {
+  font-size: 9px;
+  fill: var(--color-ink-soft);
+}
+.react-flow__handle {
+  width: 6px;
+  height: 6px;
+  background: var(--color-line);
+  border: 1px solid #fff;
+}
+.react-flow__node {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .sculpture__blob,
+  .float-slow {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media print {
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+  .lg\:pl-\[248px\] {
+    padding-left: 0 !important;
+  }
+  body {
+    background: #fff;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .print-report .card,
+  .print-report {
+    border: 0;
+    box-shadow: none;
+  }
+  .print-report section {
+    break-inside: avoid;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  @page {
+    margin: 14mm;
+  }
+}
+

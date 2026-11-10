@@ -1,0 +1,11 @@
+.git
+.planning
+BRAIN
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.db
+**/.pytest_cache
+**/.env
+**/.env.*

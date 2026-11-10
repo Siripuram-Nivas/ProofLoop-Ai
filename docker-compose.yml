@@ -1,0 +1,14 @@
+services:
+  proofloop:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      PROOFLOOP_ENV: production
+      PROOFLOOP_SECRET: ${PROOFLOOP_SECRET:?Set PROOFLOOP_SECRET to a random value of at least 24 characters}
+      PROOFLOOP_DB: /app/backend/data/proofloop.db
+    volumes:
+      - proofloop-data:/app/backend/data
+
+volumes:
+  proofloop-data:
