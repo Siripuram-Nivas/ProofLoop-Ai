@@ -1,4 +1,10 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 import { Loader2, type LucideIcon } from "lucide-react";
 import { VERDICT_META } from "../lib/format";
 import type { Verdict } from "../lib/types";
@@ -173,6 +179,10 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
 
 export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={cn(controlClass, "min-h-32 resize-y leading-relaxed", className)} {...rest} />;
+}
+
+export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select className={cn(controlClass, "h-11 py-0", className)} {...rest} />;
 }
 
 export function InlineAlert({

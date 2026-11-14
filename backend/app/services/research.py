@@ -94,6 +94,38 @@ def fetch_sources(claim_text: str) -> list[dict]:
     return results
 
 
+def excerpt_from_url(url: str, claim_text: str) -> dict:
+    """Fetch a public page safely and return the passage most relevant to the claim.
+
+    Search snippets are never used as excerpts: only text retrieved from the page is returned.
+    """
+    from .ingest import IngestError, fetch_url
+
+    try:
+        text = fetch_url(url)
+    except IngestError as exc:
+        return {
+            "excerpt": None,
+            "locator": None,
+            "accessible": False,
+            "note": str(exc),
+        }
+    excerpt = _best_excerpt(claim_text, text)
+    if not excerpt:
+        return {
+            "excerpt": None,
+            "locator": "retrieved page text",
+            "accessible": True,
+            "note": "No passage on the retrieved page matched the claim closely enough.",
+        }
+    return {
+        "excerpt": excerpt,
+        "locator": "retrieved page text",
+        "accessible": True,
+        "note": None,
+    }
+
+
 def _best_excerpt(claim_text: str, extract: str) -> Optional[str]:
     best: Optional[tuple[float, str]] = None
     sentences = split_sentences(extract)

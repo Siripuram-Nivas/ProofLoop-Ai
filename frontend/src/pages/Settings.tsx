@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  Bot,
   Database,
   FileSearch,
   KeyRound,
@@ -10,10 +11,10 @@ import {
   TriangleAlert,
   UserRound,
 } from "lucide-react";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, type EngineAvailability, type EngineListing } from "../lib/api";
 import type { HealthInfo } from "../lib/types";
 import { useAuth } from "../lib/auth";
-import { formatDate } from "../lib/format";
+import { ENGINE_STATE_LABEL, formatDate } from "../lib/format";
 import { Button, Card, InlineAlert, Skeleton } from "../components/ui";
 
 const LIMITATIONS = [
@@ -25,9 +26,18 @@ const LIMITATIONS = [
   "There is no data-deletion UI in this version. The SQLite database is the source of truth and should be backed up as a file.",
 ];
 
+const PROVIDER_LABEL: Record<string, string> = {
+  openai: "OpenAI",
+  gemini: "Gemini",
+  google_search: "Google Search",
+};
+
 export function Settings() {
   const { user, signOut } = useAuth();
   const [health, setHealth] = useState<HealthInfo | null>(null);
+  const [engines, setEngines] = useState<EngineListing | null>(null);
+  const [engineResults, setEngineResults] = useState<Record<string, string>>({});
+  const [testing, setTesting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -36,7 +46,26 @@ export function Settings() {
       .health()
       .then(setHealth)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load API capabilities."));
+    api
+      .engines()
+      .then(setEngines)
+      .catch(() => setEngines(null));
   }, []);
+
+  const runTest = async (engine: EngineAvailability) => {
+    setTesting(engine.id);
+    try {
+      const result = await api.testEngine(engine.id);
+      setEngineResults((prev) => ({ ...prev, [engine.id]: result.detail }));
+    } catch (err) {
+      setEngineResults((prev) => ({
+        ...prev,
+        [engine.id]: err instanceof ApiError ? err.message : "Connection test failed.",
+      }));
+    } finally {
+      setTesting(null);
+    }
+  };
 
   const leave = async () => {
     setBusy(true);
@@ -169,6 +198,98 @@ export function Settings() {
           </ul>
         </Card>
       </div>
+
+      <Card className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <Bot className="size-4" aria-hidden />
+            AI engines
+          </h2>
+          <span className="text-[11px] text-ink-soft">
+            {engines
+              ? engines.config.live_calls_enabled
+                ? "Live provider calls enabled"
+                : "Live provider calls disabled"
+              : "Status unavailable"}
+          </span>
+        </div>
+        <p className="mt-2 max-w-3xl text-[12px] leading-relaxed text-ink-soft">
+          Providers are optional. A provider only runs when it is configured, available, and explicitly
+          selected for a stage. Tests spend one real provider request; nothing runs without a click.
+        </p>
+        {engines?.config.provider_order?.length ? (
+          <p className="mt-1 text-[11px] leading-relaxed text-ink-soft">
+            Automatic failover{" "}
+            {engines.config.auto_fallback_enabled ? "enabled" : "disabled"}:{" "}
+            {engines.config.provider_order
+              .map((id) => PROVIDER_LABEL[id] || id)
+              .join(" → ")}{" "}
+            · up to {engines.config.fallback_max_attempts} attempt(s) ·{" "}
+            {engines.config.provider_cooldown_seconds}s cooldown after a billing or auth failure
+          </p>
+        ) : null}
+        {engines ? (
+          <ul className="mt-4 grid gap-3 md:grid-cols-3">
+            {engines.engines.map((engine) => (
+              <li key={engine.id} className="rounded-xl border border-line bg-surface/50 p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[12px] font-semibold text-ink">{engine.label}</p>
+                  <span
+                    className={
+                      engine.available
+                        ? "rounded-full bg-support/15 px-2 py-0.5 text-right text-[10px] font-semibold text-ink"
+                        : "rounded-full bg-ink-soft/15 px-2 py-0.5 text-right text-[10px] font-semibold text-ink-soft"
+                    }
+                  >
+                    {ENGINE_STATE_LABEL[engine.state || "unavailable"] || "Unavailable"}
+                  </span>
+                </div>
+                <dl className="mt-2 space-y-1 text-[11px]">
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-ink-soft">Model</dt>
+                    <dd className="truncate font-medium text-ink">{engine.model || "—"}</dd>
+                  </div>
+                  {engine.detail ? (
+                    <p className="pt-1 leading-relaxed text-ink-soft">{engine.detail}</p>
+                  ) : null}
+                  {engine.cooldown_seconds ? (
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-ink-soft">Cooldown</dt>
+                      <dd className="font-medium text-ink">{engine.cooldown_seconds}s remaining</dd>
+                    </div>
+                  ) : null}
+                </dl>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="mt-3"
+                  disabled={!engine.available}
+                  loading={testing === engine.id}
+                  onClick={() => void runTest(engine)}
+                >
+                  Connection test
+                </Button>
+                {engineResults[engine.id] ? (
+                  <p className="mt-2 text-[11px] leading-relaxed text-ink-soft">
+                    {engineResults[engine.id]}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Skeleton className="mt-4 h-28" />
+        )}
+        {engines ? (
+          <p className="mt-4 text-[11px] leading-relaxed text-ink-soft">
+            Stage defaults — extraction: <strong>{engines.config.claim_extraction}</strong>, research:{" "}
+            <strong>{engines.config.research}</strong>, analysis:{" "}
+            <strong>{engines.config.analysis || "off"}</strong>, review:{" "}
+            <strong>{engines.config.review || "off"}</strong>. Per-run overrides live on the new
+            verification page.
+          </p>
+        ) : null}
+      </Card>
 
       <Card className="p-5">
         <div className="flex items-center gap-2">

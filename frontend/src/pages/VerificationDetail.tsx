@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
+  Bot,
   ChevronDown,
   ExternalLink,
   FileSearch,
@@ -15,7 +16,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
-import type { GraphData, Report, VerificationJob } from "../lib/types";
+import type { AiInfo, GraphData, Report, VerificationJob } from "../lib/types";
 import { isActiveStatus, JOB_STATUS_LABEL, inputKindLabel, relativeTime } from "../lib/format";
 import { StageTimeline } from "../components/StageTimeline";
 import { ClaimList } from "../components/ClaimCard";
@@ -33,6 +34,25 @@ const TABS: { id: Tab; label: string; icon: typeof FileText }[] = [
   { id: "radar", label: "Contradiction radar", icon: Radar },
   { id: "report", label: "Proof report", icon: FileText },
 ];
+
+const PROVIDER_LABEL: Record<string, string> = {
+  openai: "OpenAI",
+  gemini: "Gemini",
+  google_search: "Google Search",
+};
+
+const AI_UNAVAILABLE_CODES = new Set([
+  "all_providers_failed",
+  "no_providers_configured",
+  "providers_cooling_down",
+]);
+
+function aiUnavailable(ai: AiInfo): boolean {
+  if (ai.provider) return false;
+  return [ai.analysis, ai.review, ai.second_review].some(
+    (section) => section?.error && AI_UNAVAILABLE_CODES.has(section.error.code),
+  );
+}
 
 export function VerificationDetail() {
   const { id = "" } = useParams();
@@ -234,6 +254,28 @@ export function VerificationDetail() {
 
       <Card className="p-4">
         <StageTimeline stages={job.stages} />
+        {job.ai ? (
+          <div className="mt-3 space-y-1.5 border-t border-line pt-3" aria-live="polite">
+            {job.ai.provider ? (
+              <p className="flex items-center gap-2 text-[11px] font-medium text-ink">
+                <Bot className="size-3.5 shrink-0 text-ink-soft" aria-hidden />
+                Powered by {PROVIDER_LABEL[job.ai.provider] || job.ai.provider}
+              </p>
+            ) : null}
+            {job.ai.notices.map((text) => (
+              <p key={text} className="flex items-start gap-2 text-[11px] text-ink-soft">
+                <RefreshCw className="mt-0.5 size-3 shrink-0" aria-hidden />
+                {text}
+              </p>
+            ))}
+            {aiUnavailable(job.ai) ? (
+              <p className="flex items-start gap-2 text-[11px] text-ink-soft">
+                <TriangleAlert className="mt-0.5 size-3 shrink-0" aria-hidden />
+                All configured AI providers are currently unavailable. Deterministic results are unaffected.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {active ? (
           <p className="mt-3 flex items-center gap-2 text-[11px] text-ink-soft" aria-live="polite">
             <Loader2 className="size-3 animate-spin" aria-hidden />

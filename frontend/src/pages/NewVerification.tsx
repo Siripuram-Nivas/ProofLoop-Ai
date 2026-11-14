@@ -2,17 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
+  Bot,
   CheckCircle2,
   FileText,
   Image,
   Link2,
   ScanText,
+  Server,
   ShieldCheck,
   UploadCloud,
 } from "lucide-react";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, type EngineListing, type MomenSession } from "../lib/api";
+import { buildMomenSubmission } from "../lib/momen";
+import { ENGINE_STATE_LABEL } from "../lib/format";
 import type { HealthInfo } from "../lib/types";
-import { Button, Card, Field, InlineAlert, Input, Textarea, cn } from "../components/ui";
+import {
+  Button,
+  Card,
+  Field,
+  InlineAlert,
+  Input,
+  Select,
+  Textarea,
+  cn,
+} from "../components/ui";
 
 type Mode = "text" | "document" | "url" | "image";
 
@@ -38,10 +51,106 @@ export function NewVerification() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthInfo | null>(null);
+  const [momen, setMomen] = useState<MomenSession | null>(null);
+  const [momenEmail, setMomenEmail] = useState("");
+  const [momenPassword, setMomenPassword] = useState("");
+  const [momenWorkspace, setMomenWorkspace] = useState<number | "">("");
+  const [momenBusy, setMomenBusy] = useState(false);
+  const [momenError, setMomenError] = useState<string | null>(null);
+  const [momenCreated, setMomenCreated] = useState<number | null>(null);
+  const [engineList, setEngineList] = useState<EngineListing | null>(null);
+  const [claimEngine, setClaimEngine] = useState<"deterministic" | "openai" | "gemini">(
+    "deterministic",
+  );
+  const [researchEngine, setResearchEngine] = useState<"wikipedia" | "google_search">(
+    "wikipedia",
+  );
+  const [analysisEngine, setAnalysisEngine] = useState<"" | "openai" | "gemini">("");
+  const [reviewEngine, setReviewEngine] = useState<"" | "openai" | "gemini">("");
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth(null));
+    api.engines().then(setEngineList).catch(() => setEngineList(null));
   }, []);
+
+  useEffect(() => {
+    api
+      .momenSession()
+      .then((next) => {
+        setMomen(next);
+        if (next.workspaces.length) setMomenWorkspace(next.workspaces[0].id);
+      })
+      .catch(() =>
+        setMomen({
+          connected: false,
+          workspaces: [],
+          read_access: false,
+          persistence_available: false,
+        }),
+      );
+  }, []);
+
+  const connectMomen = async () => {
+    if (!momenEmail.trim() || !momenPassword || momenBusy) return;
+    setMomenBusy(true);
+    setMomenError(null);
+    setMomenCreated(null);
+    try {
+      const next = await api.momenLogin(momenEmail.trim(), momenPassword);
+      setMomen(next);
+      setMomenPassword("");
+      if (next.workspaces.length) setMomenWorkspace(next.workspaces[0].id);
+    } catch (err) {
+      setMomenError(
+        err instanceof ApiError ? err.message : "Could not connect to Momen.",
+      );
+    } finally {
+      setMomenBusy(false);
+    }
+  };
+
+  const disconnectMomen = async () => {
+    await api.momenLogout().catch(() => undefined);
+    setMomen({
+      connected: false,
+      workspaces: [],
+      read_access: false,
+      persistence_available: false,
+    });
+    setMomenWorkspace("");
+    setMomenCreated(null);
+  };
+
+  const sendToMomen = async () => {
+    if (!momenWorkspace || momenBusy) {
+      setMomenError("Choose a Momen workspace first.");
+      return;
+    }
+    const body = buildMomenSubmission({
+      workspaceId: momenWorkspace,
+      mode,
+      title,
+      text,
+      url,
+    });
+    if (!body) {
+      setMomenError("Momen import supports pasted text and web URLs right now.");
+      return;
+    }
+    setMomenBusy(true);
+    setMomenError(null);
+    setMomenCreated(null);
+    try {
+      const created = await api.momenCreateVerification(body);
+      setMomenCreated(created.verification_job_id);
+    } catch (err) {
+      setMomenError(
+        err instanceof ApiError ? err.message : "Could not create the Momen job.",
+      );
+    } finally {
+      setMomenBusy(false);
+    }
+  };
 
   const canSubmit =
     mode === "text"
@@ -51,6 +160,15 @@ export function NewVerification() {
         : mode === "url"
           ? /^https?:\/\/.+/i.test(url.trim())
           : false;
+
+  const ready = (id: "openai" | "gemini" | "google_search") =>
+    engineList?.engines.find((engine) => engine.id === id)?.available ?? false;
+
+  const stateSuffix = (id: "openai" | "gemini" | "google_search") => {
+    const engine = engineList?.engines.find((item) => item.id === id);
+    if (!engine || engine.available) return "";
+    return ` (${ENGINE_STATE_LABEL[engine.state || "unavailable"] || "Unavailable"})`;
+  };
 
   const acceptFile = (candidate: File | null) => {
     setError(null);
@@ -71,6 +189,12 @@ export function NewVerification() {
     if (!canSubmit || submitting) return;
     setError(null);
     setSubmitting(true);
+    const engines = {
+      claim_extraction: claimEngine,
+      research: researchEngine,
+      analysis: analysisEngine,
+      review: reviewEngine,
+    };
     try {
       let uploadId: string | undefined;
       if (mode === "document" && file) {
@@ -81,10 +205,22 @@ export function NewVerification() {
       setStatus("Creating the verification…");
       const created =
         mode === "text"
-          ? await api.createVerification({ text: text.trim(), title: title.trim() || undefined })
+          ? await api.createVerification({
+              text: text.trim(),
+              title: title.trim() || undefined,
+              engines,
+            })
           : mode === "url"
-            ? await api.createVerification({ url: url.trim(), title: title.trim() || undefined })
-            : await api.createVerification({ upload_id: uploadId, title: title.trim() || undefined });
+            ? await api.createVerification({
+                url: url.trim(),
+                title: title.trim() || undefined,
+                engines,
+              })
+            : await api.createVerification({
+                upload_id: uploadId,
+                title: title.trim() || undefined,
+                engines,
+              });
       navigate(`/app/verifications/${created.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not start the verification.");
@@ -298,6 +434,199 @@ export function NewVerification() {
                 </li>
               ))}
             </ol>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <Bot className="size-4 text-powder-deep" aria-hidden />
+              AI engines
+            </h2>
+            <p className="mt-2 text-[11px] leading-relaxed text-ink-soft">
+              Optional. Providers that are not configured on the server cannot be selected. If the chosen
+              provider runs out of quota or has a temporary outage, the server tries the next configured
+              provider and records which one answered.
+            </p>
+            <div className="mt-3 space-y-3">
+              <Field label="Claim extraction" htmlFor="engine-extraction">
+                <Select
+                  id="engine-extraction"
+                  value={claimEngine}
+                  onChange={(event) =>
+                    setClaimEngine(event.target.value as typeof claimEngine)
+                  }
+                >
+                  <option value="deterministic">Deterministic (local)</option>
+                  <option value="openai" disabled={!ready("openai")}>
+                    OpenAI{stateSuffix("openai")}
+                  </option>
+                  <option value="gemini" disabled={!ready("gemini")}>
+                    Gemini{stateSuffix("gemini")}
+                  </option>
+                </Select>
+              </Field>
+              <Field label="Research" htmlFor="engine-research">
+                <Select
+                  id="engine-research"
+                  value={researchEngine}
+                  onChange={(event) =>
+                    setResearchEngine(event.target.value as typeof researchEngine)
+                  }
+                >
+                  <option value="wikipedia">Wikipedia (deterministic)</option>
+                  <option value="google_search" disabled={!ready("google_search")}>
+                    Google Search via Gemini{stateSuffix("google_search")}
+                  </option>
+                </Select>
+              </Field>
+              <Field label="Evidence analysis" htmlFor="engine-analysis">
+                <Select
+                  id="engine-analysis"
+                  value={analysisEngine}
+                  onChange={(event) =>
+                    setAnalysisEngine(event.target.value as typeof analysisEngine)
+                  }
+                >
+                  <option value="">Off</option>
+                  <option value="openai" disabled={!ready("openai")}>
+                    OpenAI{stateSuffix("openai")}
+                  </option>
+                  <option value="gemini" disabled={!ready("gemini")}>
+                    Gemini{stateSuffix("gemini")}
+                  </option>
+                </Select>
+              </Field>
+              <Field label="Independent review" htmlFor="engine-review">
+                <Select
+                  id="engine-review"
+                  value={reviewEngine}
+                  onChange={(event) =>
+                    setReviewEngine(event.target.value as typeof reviewEngine)
+                  }
+                >
+                  <option value="">Off</option>
+                  <option value="openai" disabled={!ready("openai")}>
+                    OpenAI{stateSuffix("openai")}
+                  </option>
+                  <option value="gemini" disabled={!ready("gemini")}>
+                    Gemini{stateSuffix("gemini")}
+                  </option>
+                </Select>
+              </Field>
+            </div>
+            <p className="mt-3 text-[11px] leading-relaxed text-ink-soft">
+              Model output is recorded as a recommendation. It never changes the deterministic verdict
+              or the stored excerpts.
+            </p>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <Server className="size-4 text-powder-deep" aria-hidden />
+              Momen backend
+            </h2>
+            {momen?.connected ? (
+              <div className="mt-3 space-y-3">
+                <p className="text-[12px] text-ink-soft">
+                  Connected as{" "}
+                  <span className="font-medium text-ink">
+                    {momen.account?.email || momen.account?.username || "Momen account"}
+                  </span>
+                </p>
+                {momen.workspaces.length ? (
+                  <Field label="Workspace" htmlFor="momen-workspace">
+                    <Select
+                      id="momen-workspace"
+                      value={momenWorkspace}
+                      onChange={(event) => {
+                        setMomenWorkspace(
+                          event.target.value ? Number(event.target.value) : "",
+                        );
+                        setMomenCreated(null);
+                      }}
+                    >
+                      {momen.workspaces.map((workspace) => (
+                        <option key={workspace.id} value={workspace.id}>
+                          {workspace.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                ) : (
+                  <InlineAlert tone="warn">
+                    No Momen workspace could be listed. Server read access may not be
+                    configured.
+                  </InlineAlert>
+                )}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void sendToMomen()}
+                  loading={momenBusy}
+                  disabled={!momenWorkspace || (mode !== "text" && mode !== "url")}
+                >
+                  Send input to Momen
+                </Button>
+                <p className="text-[11px] leading-relaxed text-ink-soft">
+                  Creates a real Momen verification job with your Momen user token.
+                  Result persistence stays unavailable until PersistVerificationPackage
+                  is deployed.
+                </p>
+                {mode !== "text" && mode !== "url" ? (
+                  <p className="text-[11px] leading-relaxed text-ink-soft">
+                    Momen file upload is not wired yet, so PDF and image inputs cannot
+                    be sent from here.
+                  </p>
+                ) : null}
+                {momenCreated ? (
+                  <InlineAlert tone="success">
+                    Momen job #{momenCreated} created. Result persistence is not
+                    available yet.
+                  </InlineAlert>
+                ) : null}
+                <Button size="sm" variant="ghost" onClick={() => void disconnectMomen()}>
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <p className="text-[12px] leading-relaxed text-ink-soft">
+                  Sign in to an existing Momen account. No Momen account is created and
+                  local ProofLoop accounts are unchanged.
+                </p>
+                <Field label="Momen email" htmlFor="momen-email">
+                  <Input
+                    id="momen-email"
+                    type="email"
+                    autoComplete="username"
+                    value={momenEmail}
+                    onChange={(event) => setMomenEmail(event.target.value)}
+                  />
+                </Field>
+                <Field label="Momen password" htmlFor="momen-password">
+                  <Input
+                    id="momen-password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={momenPassword}
+                    onChange={(event) => setMomenPassword(event.target.value)}
+                  />
+                </Field>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void connectMomen()}
+                  loading={momenBusy}
+                  disabled={!momenEmail.trim() || !momenPassword}
+                >
+                  Connect Momen
+                </Button>
+              </div>
+            )}
+            {momenError ? (
+              <InlineAlert tone="error" className="mt-3">
+                {momenError}
+              </InlineAlert>
+            ) : null}
           </Card>
 
           <Card className="p-5">

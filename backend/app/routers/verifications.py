@@ -5,6 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from .. import db, security
+from ..engines import job_engines
+from ..engines.errors import EngineError
 from ..schemas import ClaimCreate, ClaimPatch, VerificationCreate
 from ..services.graph import build_graph
 from ..services.pipeline import ACTIVE_STATUSES, new_stages, run_pipeline
@@ -71,6 +73,15 @@ def create_verification(
         input_text or input_url or "", fallback_title
     )
 
+    try:
+        engines = job_engines(
+            payload.engines.model_dump(exclude_none=True) if payload.engines else None
+        )
+    except EngineError as exc:
+        raise HTTPException(
+            status_code=422, detail={"code": exc.code, "message": exc.message}
+        ) from exc
+
     job = {
         "id": db.new_id("ver"),
         "user_id": user["id"],
@@ -83,6 +94,9 @@ def create_verification(
         "created_at": db.utcnow(),
         "updated_at": db.utcnow(),
         "engine": {"extraction": "deterministic", "research": "wikipedia"},
+        "engines": engines,
+        "ai_usage": [],
+        "research_provenance": [],
         "stages": new_stages(),
         "claims": [],
         "sources": [],

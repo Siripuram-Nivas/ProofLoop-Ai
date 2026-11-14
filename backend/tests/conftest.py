@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import os
+
+# Tests must never reach a real provider: pin the master gate off before app.config
+# reads backend/.env. A local .env with live calls enabled must not spend credits here.
+os.environ["PROOFLOOP_AI_LIVE_CALLS_ENABLED"] = "false"
+
 from dataclasses import replace
 
 import pytest

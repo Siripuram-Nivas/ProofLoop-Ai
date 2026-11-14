@@ -58,6 +58,21 @@ export const CATEGORY_LABEL: Record<string, string> = {
   general: "Statement",
 };
 
+// Mirrors the backend `state` field on a provider. `available` decides selectability;
+// the state explains why, so "disabled" is never shown as "unavailable".
+export const ENGINE_STATE_LABEL: Record<string, string> = {
+  available: "Available",
+  configured: "Configured — not yet tested",
+  disabled: "Disabled — live calls disabled",
+  missing_api_key: "Unavailable — API key missing",
+  missing_model: "Unavailable — model missing",
+  sdk_missing: "Unavailable — SDK not installed",
+  search_disabled: "Disabled — search off",
+  quota_exhausted: "Quota exhausted",
+  temporarily_unavailable: "Temporarily unavailable",
+  unavailable: "Unavailable",
+};
+
 export function formatDate(iso?: string | null): string {
   if (!iso) return "Unknown";
   const date = new Date(iso);

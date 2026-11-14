@@ -44,6 +44,9 @@ def build_report(job: dict) -> dict:
                 "verdict_basis": claim.get("verdict_basis"),
                 "confidence": claim.get("confidence"),
                 "confidence_kind": "extraction_confidence",
+                "ai_analysis": claim.get("ai_analysis"),
+                "independent_review": claim.get("independent_review"),
+                "second_review": claim.get("second_review"),
                 "evidence": [
                     {
                         "id": item["id"],
@@ -88,6 +91,23 @@ def build_report(job: dict) -> dict:
         "ProofLoop AI does not establish absolute truth. It reports what the retrieved evidence "
         "supports, contradicts, or leaves unresolved.",
     ]
+    ai = job.get("ai") or {}
+    reviewed = int((ai.get("review") or {}).get("claims_reviewed") or 0) + int(
+        (ai.get("second_review") or {}).get("claims_reviewed") or 0
+    )
+    analyzed = int((ai.get("analysis") or {}).get("claims_analyzed") or 0)
+    if reviewed or analyzed:
+        limitations.append(
+            "Model output is structured recommendation, not proof. Model agreement is not "
+            "independent factual verification, and model confidence is never averaged into the "
+            "verdict. Verdicts come from the persisted source excerpts and deterministic comparison."
+        )
+    if job.get("engine", {}).get("research") == "google_search":
+        limitations.append(
+            "Sources were discovered through Google Search grounding. Citation metadata is preserved, "
+            "but only sources with a readable retrieved excerpt can support or contradict a claim."
+        )
+
     if summary["inconclusive"] or summary["unverified"]:
         limitations.append(
             f"{summary['inconclusive'] + summary['unverified']} claim(s) have no usable evidence. "
@@ -109,6 +129,10 @@ def build_report(job: dict) -> dict:
         "input_text": job.get("input_text"),
         "input_url": job.get("input_url"),
         "engine": job.get("engine", {}),
+        "ai": ai,
+        "ai_usage": job.get("ai_usage", []),
+        "ai_usage_total": job.get("ai_usage_total"),
+        "research_provenance": job.get("research_provenance", []),
         "summary": summary,
         "claims": claim_findings,
         "sources": sources,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -23,11 +23,20 @@ class Credentials(BaseModel):
         return value
 
 
+class EngineSelection(BaseModel):
+    claim_extraction: Optional[Literal["deterministic", "openai", "gemini"]] = None
+    research: Optional[Literal["wikipedia", "google_search"]] = None
+    analysis: Optional[Literal["", "openai", "gemini"]] = None
+    review: Optional[Literal["", "openai", "gemini"]] = None
+    second_review: Optional[Literal["", "openai", "gemini"]] = None
+
+
 class VerificationCreate(BaseModel):
     title: Optional[str] = Field(default=None, max_length=160)
     text: Optional[str] = None
     url: Optional[str] = Field(default=None, max_length=2000)
     upload_id: Optional[str] = None
+    engines: Optional[EngineSelection] = None
 
     @field_validator("text")
     @classmethod

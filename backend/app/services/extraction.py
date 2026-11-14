@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import Optional
 
-import httpx
-
-from ..config import settings
 from .text import (
     content_tokens,
     extract_dates,
@@ -163,35 +159,16 @@ def _extraction_confidence(text: str, split: bool) -> float:
     return round(min(score, 0.95), 2)
 
 
-def _gemini_claims(text: str) -> Optional[list[str]]:
+def _llm_claims(text: str) -> Optional[tuple[list[str], str]]:
     """Optional LLM-assisted extraction. Proposals must appear in the source text."""
-    if not settings.gemini_api_key:
-        return None
-    prompt = (
-        "Split the user's text into atomic, independently verifiable factual claims. "
-        "Preserve names, numbers, dates and meaning exactly. One claim per array item. "
-        "Do not add facts that are not in the text. Return JSON only: {\"claims\": [\"...\"]}.\n\n"
-        f"TEXT:\n{text[:12000]}"
-    )
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-    )
+    from ..engines import router
+    from ..engines.errors import EngineError
+
     try:
-        with httpx.Client(timeout=25) as client:
-            response = client.post(
-                url,
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1},
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
-        raw = payload["candidates"][0]["content"]["parts"][0]["text"]
-        proposed = json.loads(raw).get("claims", [])
-    except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+        routed = router.call("extraction", "extract_claims", "gemini", text)
+    except EngineError:
         return None
+    proposed = [claim.text for claim in routed.call.data.claims]
     source_norm = _normalise(text)
     valid: list[str] = []
     for claim in proposed:
@@ -201,12 +178,31 @@ def _gemini_claims(text: str) -> Optional[list[str]]:
         norm = _normalise(claim)
         if len(norm) >= 12 and norm in source_norm and norm not in {_normalise(v) for v in valid}:
             valid.append(claim)
-    return valid[:CLAIM_CAP] or None
+    return (valid[:CLAIM_CAP] or None, routed.engine) if valid else None
+
+
+def build_claim(
+    text: str, *, category: Optional[str] = None, confidence: float = 0.85
+) -> dict:
+    """Build the pipeline claim shape from provider or deterministic text."""
+    claim = text.strip()
+    if not claim.endswith((".", "!", "?")):
+        claim += "."
+    return {
+        "text": claim,
+        "original_span": claim.rstrip("."),
+        "category": category or _categorise(claim),
+        "entities": extract_entities(claim),
+        "numbers": extract_numbers(claim),
+        "dates": extract_dates(claim),
+        "confidence": round(confidence, 2),
+    }
 
 
 def extract_claims(text: str) -> tuple[list[dict], str]:
-    llm_claims = _gemini_claims(text)
-    if llm_claims:
+    llm = _llm_claims(text)
+    if llm:
+        llm_claims, engine = llm
         claims = []
         for index, claim in enumerate(llm_claims):
             if not claim.endswith((".", "!", "?")):
@@ -223,7 +219,7 @@ def extract_claims(text: str) -> tuple[list[dict], str]:
                 }
             )
         if claims:
-            return claims, "gemini"
+            return claims, engine
     return split_claims(text), "deterministic"
 
 

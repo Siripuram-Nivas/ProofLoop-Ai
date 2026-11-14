@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import db
 from .config import BASE_DIR, settings
-from .routers import auth, health, stats, uploads, verifications
+from .routers import auth, engines, health, momen, stats, uploads, verifications
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,10 +35,12 @@ async def lifespan(app: FastAPI):
             "secret; set a long random value before deploying."
         )
     logger.info(
-        "ProofLoop API ready (env=%s, research=%s, extraction=%s)",
+        "ProofLoop API ready (env=%s, research=%s, extraction=%s, momen=%s, ai_live=%s)",
         settings.env,
         settings.research_provider,
         "gemini" if settings.gemini_api_key else "deterministic",
+        "read+write" if settings.momen_admin_token else "write-only (no read token)",
+        "on" if settings.ai_live_calls_enabled else "off",
     )
     yield
 
@@ -159,6 +161,8 @@ async def validation_handler(request: Request, exc: RequestValidationError):
 # ---------------------------------------------------------------- routes
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(momen.router, prefix="/api/v1")
+app.include_router(engines.router, prefix="/api/v1")
 app.include_router(uploads.router, prefix="/api/v1")
 app.include_router(verifications.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")

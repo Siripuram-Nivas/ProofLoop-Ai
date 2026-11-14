@@ -153,6 +153,31 @@ export interface Report {
   disclaimer: string;
 }
 
+export interface AiProviderEvent {
+  stage: string;
+  provider: string;
+  outcome: string;
+  code: string | null;
+}
+
+export interface AiSection {
+  engine: string | null;
+  provider?: string | null;
+  error?: { code: string; message: string } | null;
+  outcome_unknown?: boolean;
+  skipped?: string;
+}
+
+export interface AiInfo {
+  provider: string | null;
+  notices: string[];
+  events: AiProviderEvent[];
+  analysis: AiSection;
+  review: AiSection;
+  second_review: AiSection;
+  error?: string;
+}
+
 export interface VerificationJob {
   id: string;
   title: string;
@@ -164,6 +189,7 @@ export interface VerificationJob {
   created_at: string;
   updated_at: string;
   engine: { extraction: string; research: string };
+  ai?: AiInfo | null;
   stages: Stage[];
   claims: Claim[];
   sources: Source[];
